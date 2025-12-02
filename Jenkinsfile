@@ -2,16 +2,6 @@ pipeline {
     agent any
 
     stages {
-        // This is a comment
-        /*
-            This is a multi-line comment
-            This is a multi-line comment
-            stage('Commented stage') {
-                steps {
-                    echo 'This is a commented stage'
-                }
-            }
-        */
         stage('Build') {
             agent {
                 docker {
@@ -30,6 +20,7 @@ pipeline {
                 '''
             }
         }
+
         stage('Test') {
             agent {
                 docker {
@@ -37,15 +28,14 @@ pipeline {
                     reuseNode true
                 }
             }
-
             steps {
                 sh '''
-                    # This is a single line comment
                     test -f build/index.html
                     npm run test
                 '''
             }
         }
+
         stage('E2E') {
             agent {
                 docker {
@@ -53,7 +43,6 @@ pipeline {
                     reuseNode true
                 }
             }
-            
             steps {
                 sh '''
                     npm install serve
@@ -68,7 +57,11 @@ pipeline {
     post {
         always {
             junit '**/junit.xml'
-            publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, icon: '', keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright HTML Report', reportTitles: '', useWrapperFileDirectly: true])
+
+            // Save the default report folder from Playwright
+            archiveArtifacts artifacts: 'playwright-report/**', allowEmptyArchive: true
+
+            // ❌ Do NOT use publishHTML — Playwright cannot run inside Jenkins iframe due to CSP.
         }
     }
 }

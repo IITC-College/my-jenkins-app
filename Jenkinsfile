@@ -16,7 +16,6 @@ pipeline {
             }
             steps {
                 sh '''
-                    echo $RENDER_API_KEY_CRED
                     ls -la
                     node -v
                     npm -v

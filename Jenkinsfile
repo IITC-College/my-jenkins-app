@@ -88,10 +88,12 @@ pipeline {
             steps {
                 unstash 'build-artifacts'
                 sh '''
-                    npm install netlify-cli
+                    npm install netlify-cli jq
                     node_modules/.bin/netlify deploy \
                         --dir=build \
                         --site=$NETLIFY_SITE_ID \
+                        --json > deploy-output.json
+                    node_modules/.bin/jq -r '.deploy_url' deploy-output.json
                 '''
             }
         }

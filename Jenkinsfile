@@ -35,6 +35,11 @@ pipeline {
                     ls -la build/
                 '''
             }
+            post {
+                always {
+                    stash includes: 'build/**', name: 'build-artifacts'
+                }
+            }
         }
         stage('Run Test') {
             parallel {
@@ -92,13 +97,10 @@ pipeline {
                 }
             }
             steps {
+                unstash 'build-artifacts'
                 sh '''
-                    echo "Installing Netlify CLI..."
                     npm install netlify-cli
-                    node_modules/.bin/netlify --version
-                    echo "Deploying to production. SITE ID: $NETLIFY_SITE_ID"
-                    node_modules/.bin/netlify status
-                    node_modules/.bin/netlify deploy --dir build --prod --site $NETLIFY_SITE_ID
+                    node_modules/.bin/netlify deploy --dir=build --prod --site=$NETLIFY_SITE_ID
                 '''
             }
         }

@@ -78,7 +78,25 @@ pipeline {
                 }
             }
         }
-        stage('Deploy to Netlify') {
+        stage('Deploy STAGING') {
+            agent {
+                docker {
+                    image 'node:18-alpine'
+                    reuseNode true
+                }
+            }
+            steps {
+                unstash 'build-artifacts'
+                sh '''
+                    npm install netlify-cli
+                    node_modules/.bin/netlify deploy \
+                        --dir=build \
+                        --site=$NETLIFY_SITE_ID \
+                        --prod=false
+                '''
+            }
+        }
+        stage('Deploy PROD') {
             agent {
                 docker {
                     image 'node:18-alpine'
@@ -110,7 +128,7 @@ pipeline {
             environment {
                 CI_ENVIRONMENT_URL = 'https://tangerine-lollipop-cafc67.netlify.app'
             }
-            
+
             steps {
                 sh '''
                     npx playwright test --reporter=html

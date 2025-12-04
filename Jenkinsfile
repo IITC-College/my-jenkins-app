@@ -94,10 +94,10 @@ pipeline {
             steps {
                 sh '''
                     echo "Installing Render CLI..."
-                    npm install -g render-cli
+                    npm install render-cli
 
                     echo "Triggering Render Deployment..."
-                    render deploy service srv-d4olkdvpm1nc73eags80 --wait
+                    node_modules/.bin/render deploy service srv-d4olkdvpm1nc73eags80 --wait
                 '''
             }
         }

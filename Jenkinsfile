@@ -92,7 +92,6 @@ pipeline {
                     node_modules/.bin/netlify deploy \
                         --dir=build \
                         --site=$NETLIFY_SITE_ID \
-                        --prod=false
                 '''
             }
         }

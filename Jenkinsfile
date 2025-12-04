@@ -27,7 +27,7 @@ pipeline {
             }
             post {
                 always {
-                    stash includes: 'build/**', name: 'build-artifacts'
+                    stash includes: 'build/**,netlify.toml', name: 'build-artifacts'
                 }
             }
         }
@@ -90,14 +90,16 @@ pipeline {
                 unstash 'build-artifacts'
                 sh '''
                     npm install netlify-cli
+
+                    # netlify.toml inside workspace controls build command = ""
                     node_modules/.bin/netlify deploy \
                         --dir=build \
                         --prod \
-                        --site=$NETLIFY_SITE_ID \
-                        --skip-build
+                        --site=$NETLIFY_SITE_ID
                 '''
             }
         }
+
 
 
     }

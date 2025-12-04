@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        RENDER_API_KEY_CRED = credentials('RENDER_API_KEY_CRED')
+        RENDER_API_KEY = credentials('RENDER_API_KEY_CRED')
     }
 
     stages {
@@ -83,5 +83,26 @@ pipeline {
                 }
             }
         }
+        stage('Deploy to Render') {
+            when {
+                branch 'main'
+            }
+            agent {
+                docker {
+                    image 'node:18-alpine'
+                    reuseNode true
+                }
+            }
+            steps {
+                sh '''
+                    echo "Installing Render CLI..."
+                    npm install -g render-cli
+
+                    echo "Triggering Render Deployment..."
+                    render deploy service srv-d4olkdvpm1nc73eags80 --wait
+                '''
+            }
+        }
+
     }
 }

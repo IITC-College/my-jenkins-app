@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        RENDER_API_KEY_CRED = credentials('RENDER_API_KEY')
+        RENDER_API_KEY_CRED = credentials('RENDER_API_KEY_CRED')
     }
 
     stages {

@@ -93,9 +93,6 @@ pipeline {
             }
             steps {
                 sh '''
-                    # Install curl if not available (should be in alpine, but just in case)
-                    apk add --no-cache curl || true
-                    
                     echo "Triggering Render Deployment..."
                     SERVICE_ID="srv-d4olkdvpm1nc73eags80"
                     API_KEY="${RENDER_API_KEY}"
@@ -105,76 +102,115 @@ pipeline {
                         exit 1
                     fi
                     
-                    # Trigger deployment
-                    DEPLOY_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-                        -H "Authorization: Bearer ${API_KEY}" \
-                        -H "Accept: application/json" \
-                        "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
+                    # Use Node.js to trigger deployment and poll status
+                    SERVICE_ID="${SERVICE_ID}" API_KEY="${API_KEY}" node << 'EOF'
+                    const https = require('https');
                     
-                    HTTP_CODE=$(echo "${DEPLOY_RESPONSE}" | tail -n1)
-                    RESPONSE_BODY=$(echo "${DEPLOY_RESPONSE}" | sed '$d')
+                    const SERVICE_ID = process.env.SERVICE_ID;
+                    const API_KEY = process.env.API_KEY;
                     
-                    echo "HTTP Status Code: ${HTTP_CODE}"
-                    echo "Response: ${RESPONSE_BODY}"
+                    function makeRequest(options, data) {
+                        return new Promise((resolve, reject) => {
+                            const req = https.request(options, (res) => {
+                                let body = '';
+                                res.on('data', (chunk) => body += chunk);
+                                res.on('end', () => {
+                                    try {
+                                        const parsed = JSON.parse(body);
+                                        resolve({ statusCode: res.statusCode, data: parsed });
+                                    } catch (e) {
+                                        resolve({ statusCode: res.statusCode, data: body });
+                                    }
+                                });
+                            });
+                            
+                            req.on('error', reject);
+                            if (data) {
+                                req.write(JSON.stringify(data));
+                            }
+                            req.end();
+                        });
+                    }
                     
-                    if [ "${HTTP_CODE}" != "201" ] && [ "${HTTP_CODE}" != "200" ]; then
-                        echo "Error: Failed to trigger deployment. HTTP ${HTTP_CODE}"
-                        exit 1
-                    fi
-                    
-                    # Extract deploy ID from response (try multiple patterns)
-                    DEPLOY_ID=$(echo "${RESPONSE_BODY}" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
-                    
-                    if [ -z "${DEPLOY_ID}" ]; then
-                        # Try alternative pattern
-                        DEPLOY_ID=$(echo "${RESPONSE_BODY}" | grep -o '"deployId":"[^"]*' | head -1 | cut -d'"' -f4)
-                    fi
-                    
-                    if [ -z "${DEPLOY_ID}" ]; then
-                        echo "Warning: Could not extract deploy ID from response"
-                        echo "Deployment may have been triggered, but cannot monitor status"
-                        echo "Please check Render dashboard for deployment status"
-                        exit 0
-                    fi
-                    
-                    echo "Deploy ID: ${DEPLOY_ID}"
-                    echo "Waiting for deployment to complete..."
-                    
-                    # Poll deployment status
-                    MAX_ATTEMPTS=60
-                    ATTEMPT=0
-                    while [ ${ATTEMPT} -lt ${MAX_ATTEMPTS} ]; do
-                        STATUS_RESPONSE=$(curl -s -X GET \
-                            -H "Authorization: Bearer ${API_KEY}" \
-                            -H "Accept: application/json" \
-                            "https://api.render.com/v1/deploys/${DEPLOY_ID}")
+                    async function triggerDeployment() {
+                        const options = {
+                            hostname: 'api.render.com',
+                            path: `/v1/services/${SERVICE_ID}/deploys`,
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${API_KEY}`,
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            }
+                        };
                         
-                        STATUS=$(echo "${STATUS_RESPONSE}" | grep -o '"status":"[^"]*' | head -1 | cut -d'"' -f4)
+                        console.log('Triggering deployment...');
+                        const response = await makeRequest(options);
                         
-                        if [ -z "${STATUS}" ]; then
-                            echo "Warning: Could not determine deployment status"
-                            sleep 10
-                            ATTEMPT=$((ATTEMPT + 1))
-                            continue
-                        fi
+                        console.log(`HTTP Status Code: ${response.statusCode}`);
+                        console.log(`Response: ${JSON.stringify(response.data, null, 2)}`);
                         
-                        echo "Deployment status: ${STATUS} (attempt ${ATTEMPT}/${MAX_ATTEMPTS})"
+                        if (response.statusCode !== 201 && response.statusCode !== 200) {
+                            console.error(`Error: Failed to trigger deployment. HTTP ${response.statusCode}`);
+                            process.exit(1);
+                        }
                         
-                        if [ "${STATUS}" = "live" ]; then
-                            echo "Deployment completed successfully!"
-                            exit 0
-                        elif [ "${STATUS}" = "build_failed" ] || [ "${STATUS}" = "update_failed" ] || [ "${STATUS}" = "canceled" ]; then
-                            echo "Deployment failed with status: ${STATUS}"
-                            exit 1
-                        fi
+                        const deployId = response.data.deploy?.id || response.data.id || response.data.deployId;
                         
-                        sleep 10
-                        ATTEMPT=$((ATTEMPT + 1))
-                    done
+                        if (!deployId) {
+                            console.log('Warning: Could not extract deploy ID from response');
+                            console.log('Deployment may have been triggered, but cannot monitor status');
+                            console.log('Please check Render dashboard for deployment status');
+                            process.exit(0);
+                        }
+                        
+                        console.log(`Deploy ID: ${deployId}`);
+                        console.log('Waiting for deployment to complete...');
+                        
+                        // Poll deployment status
+                        const MAX_ATTEMPTS = 60;
+                        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+                            await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+                            
+                            const statusOptions = {
+                                hostname: 'api.render.com',
+                                path: `/v1/deploys/${deployId}`,
+                                method: 'GET',
+                                headers: {
+                                    'Authorization': `Bearer ${API_KEY}`,
+                                    'Accept': 'application/json'
+                                }
+                            };
+                            
+                            const statusResponse = await makeRequest(statusOptions);
+                            const status = statusResponse.data.deploy?.status || statusResponse.data.status;
+                            
+                            if (!status) {
+                                console.log(`Warning: Could not determine deployment status (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+                                continue;
+                            }
+                            
+                            console.log(`Deployment status: ${status} (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+                            
+                            if (status === 'live') {
+                                console.log('Deployment completed successfully!');
+                                process.exit(0);
+                            } else if (status === 'build_failed' || status === 'update_failed' || status === 'canceled') {
+                                console.error(`Deployment failed with status: ${status}`);
+                                process.exit(1);
+                            }
+                        }
+                        
+                        console.error(`Deployment did not complete within expected time (${MAX_ATTEMPTS} attempts)`);
+                        console.log('Please check Render dashboard for current status');
+                        process.exit(1);
+                    }
                     
-                    echo "Deployment did not complete within expected time (${MAX_ATTEMPTS} attempts)"
-                    echo "Please check Render dashboard for current status"
-                    exit 1
+                    triggerDeployment().catch((error) => {
+                        console.error('Error:', error.message);
+                        process.exit(1);
+                    });
+                    EOF
                 '''
             }
         }

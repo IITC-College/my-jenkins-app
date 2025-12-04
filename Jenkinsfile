@@ -2,13 +2,12 @@ pipeline {
     agent any
 
     environment {
-        RENDER_API_KEY = credentials('RENDER_API_KEY_CRED')
+        NETLIFY_SITE_ID = 'be1133e0-d5ac-4f24-bab1-9a5e0c7e43bf'
     }
 
     stages {
         // This is a comment
         /*
-            This is a multi-line comment
             This is a multi-line comment
             stage('Commented stage') {
                 steps {
@@ -95,7 +94,7 @@ pipeline {
                     echo "Installing Netlify CLI..."
                     npm install netlify-cli
                     node_modules/.bin/netlify --version
-                    echo "Triggering Netlify Deployment..."
+                    echo "Triggering Netlify Deploy... site id: $NETLIFY_SITE_ID"
                 '''
             }
         }

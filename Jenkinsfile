@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        RENDER_API_KEY_CRED = credentials('RENDER_API_KEY')
+    }
+
     stages {
         // This is a comment
         /*
@@ -21,6 +25,7 @@ pipeline {
             }
             steps {
                 sh '''
+                    echo $RENDER_API_KEY_CRED
                     ls -la
                     node -v
                     npm -v

@@ -10,6 +10,17 @@ pipeline {
     stages {
 
         /* =======================
+           0) DOCKER BUILD
+        ======================= */
+        stage('Docker Build') {
+            steps {
+                sh '''
+                    docker build -t my-playwright .
+                '''
+            }
+        }
+
+        /* =======================
            1) BUILD
         ======================= */
         stage('Build') {
@@ -57,15 +68,14 @@ pipeline {
                 stage('E2E') {
                     agent {
                         docker {
-                            image 'mcr.microsoft.com/playwright:v1.57.0-jammy'
+                            image 'my-playwright'
                             args '-u root:root'
+                            reuseNode true
                         }
                     }
                     steps {
                         sh '''
                             mkdir -p $NPM_CONFIG_CACHE
-
-                            npm install serve
                             npx serve -s build & 
                             sleep 10
 
@@ -94,14 +104,14 @@ pipeline {
         stage('Deploy staging') {
             agent {
                 docker {
-                    image 'node:20-alpine'
+                    image 'my-playwright'
                     args '-u root:root'
+                    reuseNode true
                 }
             }
             steps {
                 script {
                     sh '''
-                        npm install -g netlify-cli
                         netlify deploy --dir=build --json > deploy.json
                     '''
 
@@ -131,13 +141,12 @@ pipeline {
         stage('Deploy prod') {
             agent {
                 docker {
-                    image 'node:20-alpine'
+                    image 'my-playwright'
                     args '-u root:root'
                 }
             }
             steps {
                 sh '''
-                    npm install -g netlify-cli
                     netlify deploy --dir=build --prod
                 '''
             }
@@ -149,7 +158,8 @@ pipeline {
         stage('Prod E2E') {
             agent {
                 docker {
-                    image 'mcr.microsoft.com/playwright:v1.57.0-jammy'
+                    image 'my-playwright'
+                    reuseNode true
                     args '-u root:root'
                 }
             }

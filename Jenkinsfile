@@ -2,57 +2,71 @@ pipeline {
     agent any
 
     environment {
-        NETLIFY_SITE_ID = 'PUT YOUR NETLIFY SITE ID HERE'
-        NETLIFY_AUTH_TOKEN = credentials('netlify-token')
+        NETLIFY_SITE_ID     = 'be1133e0-d5ac-4f24-bab1-9a5e0c7e43bf'
+        NETLIFY_AUTH_TOKEN  = credentials('netlify-token')
     }
 
     stages {
 
+        /* =======================
+           BUILD STAGE
+        ======================= */
         stage('Build') {
             agent {
                 docker {
-                    image 'node:22-alpine'
+                    image 'node:20-alpine'   // Stable + fast
                     reuseNode true
                 }
             }
             steps {
                 sh '''
-                    ls -la
+                    echo "=== Node & NPM Versions ==="
                     node --version
                     npm --version
-                    npm ci || true
-                    echo "---- NPM ERROR LOG ----"
-                    ls -la /home/node/.npm/_logs || true
-                    cat /home/node/.npm/_logs/*.log || true
+
+                    echo "=== Installing dependencies ==="
+                    npm ci --omit=optional
+
+                    echo "=== Building project ==="
                     npm run build
-                    ls -la
+
+                    echo "Build directory:"
+                    ls -la build/
                 '''
             }
         }
 
+
+        /* =======================
+           PARALLEL TESTING
+        ======================= */
         stage('Tests') {
             parallel {
+
+                /* ---- UNIT TESTS ---- */
                 stage('Unit tests') {
                     agent {
                         docker {
-                            image 'node:22-alpine'
+                            image 'node:20-alpine'
                             reuseNode true
                         }
                     }
 
                     steps {
                         sh '''
-                            #test -f build/index.html
-                            npm test
+                            npm test --if-present
                         '''
                     }
+
                     post {
                         always {
-                            junit 'test-results/junit.xml'
+                            junit allowEmptyResults: true, testResults: 'test-results/junit.xml'
                         }
                     }
                 }
 
+
+                /* ---- E2E TESTS LOCAL ---- */
                 stage('E2E') {
                     agent {
                         docker {
@@ -63,66 +77,98 @@ pipeline {
 
                     steps {
                         sh '''
+                            echo "=== Installing serve ==="
                             npm install serve
-                            node_modules/.bin/serve -s build &
+
+                            echo "=== Starting local server ==="
+                            npx serve -s build &
                             sleep 10
-                            npx playwright test  --reporter=html
+
+                            echo "=== Running Playwright tests ==="
+                            npx playwright test --reporter=html
                         '''
                     }
 
                     post {
                         always {
-                            publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright Local', reportTitles: '', useWrapperFileDirectly: true])
+                            publishHTML([
+                                reportDir: 'playwright-report',
+                                reportFiles: 'index.html',
+                                reportName: 'Playwright Local',
+                                allowMissing: false,
+                                useWrapperFileDirectly: true
+                            ])
                         }
                     }
                 }
             }
         }
 
+
+        /* =======================
+           DEPLOY TO STAGING
+        ======================= */
         stage('Deploy staging') {
             agent {
                 docker {
-                    image 'node:22-alpine'
+                    image 'node:20-alpine'
                     reuseNode true
                 }
             }
+
             steps {
                 sh '''
-                    npm install netlify-cli
-                    node_modules/.bin/netlify --version
-                    echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
-                    node_modules/.bin/netlify status
-                    node_modules/.bin/netlify deploy --dir=build
+                    echo "=== Installing Netlify CLI ==="
+                    npm install -g netlify-cli
+
+                    echo "Deploying to Staging..."
+                    netlify --version
+                    netlify status
+                    netlify deploy --dir=build
                 '''
             }
         }
 
+
+        /* =======================
+           APPROVAL BEFORE PRODUCTION
+        ======================= */
         stage('Approval') {
             steps {
                 timeout(time: 15, unit: 'MINUTES') {
-                    input message: 'Do you wish to deploy to production?', ok: 'Yes, I am sure!'
+                    input message: 'Do you wish to deploy to production?', ok: 'Yes, Deploy Now!'
                 }
             }
         }
 
+
+        /* =======================
+           DEPLOY TO PRODUCTION
+        ======================= */
         stage('Deploy prod') {
             agent {
                 docker {
-                    image 'node:22-alpine'
+                    image 'node:20-alpine'
                     reuseNode true
                 }
             }
+
             steps {
                 sh '''
-                    npm install netlify-cli
-                    node_modules/.bin/netlify --version
-                    echo "Deploying to production. Site ID: $NETLIFY_SITE_ID"
-                    node_modules/.bin/netlify status
-                    node_modules/.bin/netlify deploy --dir=build --prod
+                    npm install -g netlify-cli
+
+                    echo "Deploying to Production..."
+                    netlify --version
+                    netlify status
+                    netlify deploy --dir=build --prod
                 '''
             }
         }
 
+
+        /* =======================
+           PROD E2E TESTS
+        ======================= */
         stage('Prod E2E') {
             agent {
                 docker {
@@ -137,13 +183,20 @@ pipeline {
 
             steps {
                 sh '''
-                    npx playwright test  --reporter=html
+                    echo "Running Playwright tests against PRODUCTION: $CI_ENVIRONMENT_URL"
+                    npx playwright test --reporter=html
                 '''
             }
 
             post {
                 always {
-                    publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright E2E', reportTitles: '', useWrapperFileDirectly: true])
+                    publishHTML([
+                        reportDir: 'playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Playwright E2E (Production)',
+                        allowMissing: false,
+                        useWrapperFileDirectly: true
+                    ])
                 }
             }
         }

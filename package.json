@@ -10,7 +10,6 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "render-cli": "^0.3.2",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
@@ -38,12 +37,12 @@
     ]
   },
   "devDependencies": {
-    "@playwright/test": "^1.57.0",
-    "yaml": "^2.8.2"
+    "@playwright/test": "^1.39.0",
+    "@types/node": "^20.8.6"
   },
   "jest-junit": {
     "suiteName": "jest tests",
-    "outputDirectory": "jest-results",
+    "outputDirectory": "test-results",
     "outputName": "junit.xml",
     "uniqueOutputName": "false",
     "classNameTemplate": "{classname}-{title}",

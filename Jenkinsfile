@@ -98,6 +98,8 @@ pipeline {
                                 reportFiles: 'index.html',
                                 reportName: 'Playwright Local',
                                 allowMissing: false,
+                                keepAll: true,
+                                alwaysLinkToLastBuild: true,
                                 useWrapperFileDirectly: true
                             ])
                         }
@@ -197,6 +199,8 @@ pipeline {
                         reportFiles: 'index.html',
                         reportName: 'Playwright E2E (Production)',
                         allowMissing: false,
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
                         useWrapperFileDirectly: true
                     ])
                 }

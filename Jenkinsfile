@@ -133,18 +133,27 @@ pipeline {
             }
 
             steps {
-                sh '''
-                    export NPM_CONFIG_CACHE=/tmp/.npm
-                    mkdir -p /tmp/.npm
+                script {
+                    sh '''
+                        export NPM_CONFIG_CACHE=/tmp/.npm
+                        mkdir -p /tmp/.npm
 
-                    echo "=== Installing Netlify CLI ==="
-                    npm install -g netlify-cli
+                        echo "=== Installing Netlify CLI ==="
+                        npm install -g netlify-cli
 
-                    echo "Deploying to Staging..."
-                    netlify --version
-                    netlify status
-                    netlify deploy --dir=build
-                '''
+                        echo "Deploying to Staging..."
+                        netlify --version
+                        netlify status
+                        netlify deploy --dir=build --json > netlify-deploy.json
+                    '''
+                    
+                    // Parse JSON and extract deploy URL
+                    def deployOutput = readFile('netlify-deploy.json').trim()
+                    def deployJson = readJSON text: deployOutput
+                    env.STAGING_URL = deployJson.deploy_url
+                    
+                    echo "✅ Staging deployed to: ${env.STAGING_URL}"
+                }
             }
         }
 
@@ -155,7 +164,7 @@ pipeline {
         stage('Approval') {
             steps {
                 timeout(time: 15, unit: 'MINUTES') {
-                    input message: 'Do you wish to deploy to production?', ok: 'Yes, Deploy Now!'
+                    input message: "Review staging site at:\n${env.STAGING_URL}\n\nDo you wish to deploy to production?", ok: 'Yes, Deploy to Production!'
                 }
             }
         }

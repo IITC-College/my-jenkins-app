@@ -2,53 +2,38 @@ pipeline {
     agent any
 
     environment {
-        NETLIFY_SITE_ID     = 'be1133e0-d5ac-4f24-bab1-9a5e0c7e43bf'
-        NETLIFY_AUTH_TOKEN  = credentials('netlify-token')
+        NETLIFY_SITE_ID    = 'be1133e0-d5ac-4f24-bab1-9a5e0c7e43bf'
+        NETLIFY_AUTH_TOKEN = credentials('netlify-token')
     }
 
     stages {
 
         /* =======================
-           BUILD STAGE
+           BUILD
         ======================= */
         stage('Build') {
             agent {
                 docker {
                     image 'node:20-alpine'
-                    args '-u root:root'        // <<< FIX: מריץ כ־root
+                    args '-u root:root'
                     reuseNode true
                 }
             }
             steps {
                 sh '''
-                    echo "=== Node & NPM Versions ==="
-                    node --version
-                    npm --version
-
-                    echo "=== Fixing NPM Cache Path ==="
                     export NPM_CONFIG_CACHE=/tmp/.npm
-                    mkdir -p /tmp/.npm
-
-                    echo "=== Installing dependencies ==="
                     npm ci --omit=optional
-
-                    echo "=== Building project ==="
                     npm run build
-
-                    echo "=== Build directory ==="
-                    ls -la build/
                 '''
             }
         }
 
-
         /* =======================
-           PARALLEL TESTING
+           TESTS
         ======================= */
         stage('Tests') {
             parallel {
 
-                /* ---- UNIT TESTS ---- */
                 stage('Unit tests') {
                     agent {
                         docker {
@@ -57,16 +42,12 @@ pipeline {
                             reuseNode true
                         }
                     }
-
                     steps {
                         sh '''
                             export NPM_CONFIG_CACHE=/tmp/.npm
-                            mkdir -p /tmp/.npm
-
                             npm test --if-present
                         '''
                     }
-
                     post {
                         always {
                             junit allowEmptyResults: true, testResults: 'test-results/junit.xml'
@@ -74,8 +55,6 @@ pipeline {
                     }
                 }
 
-
-                /* ---- E2E TESTS LOCAL ---- */
                 stage('E2E') {
                     agent {
                         docker {
@@ -84,41 +63,31 @@ pipeline {
                             reuseNode true
                         }
                     }
-
                     steps {
                         sh '''
                             export NPM_CONFIG_CACHE=/tmp/.npm
-                            mkdir -p /tmp/.npm
-
-                            echo "=== Installing serve ==="
+                            
                             npm install serve
-
-                            echo "=== Starting local server ==="
                             npx serve -s build & 
                             sleep 10
-
-                            echo "=== Running Playwright tests ==="
+                            
                             npx playwright test --reporter=html
                         '''
                     }
-
                     post {
                         always {
                             publishHTML([
                                 reportDir: 'playwright-report',
                                 reportFiles: 'index.html',
                                 reportName: 'Playwright Local',
-                                allowMissing: false,
                                 keepAll: true,
-                                alwaysLinkToLastBuild: true,
-                                useWrapperFileDirectly: true
+                                alwaysLinkToLastBuild: true
                             ])
                         }
                     }
                 }
             }
         }
-
 
         /* =======================
            DEPLOY TO STAGING
@@ -131,44 +100,34 @@ pipeline {
                     reuseNode true
                 }
             }
-
             steps {
                 script {
                     sh '''
                         export NPM_CONFIG_CACHE=/tmp/.npm
-                        mkdir -p /tmp/.npm
-
-                        echo "=== Installing Netlify CLI ==="
                         npm install -g netlify-cli
 
-                        echo "Deploying to Staging..."
-                        netlify --version
-                        netlify status
-                        netlify deploy --dir=build --json > netlify-deploy.json
+                        netlify deploy --dir=build --json > deploy.json
                     '''
-                    
-                    // Parse JSON and extract deploy URL
-                    def deployOutput = readFile('netlify-deploy.json').trim()
-                    def deployJson = readJSON text: deployOutput
-                    env.STAGING_URL = deployJson.deploy_url
-                    
-                    echo "✅ Staging deployed to: ${env.STAGING_URL}"
+
+                    // Parse simple JSON inside Jenkins without jq
+                    def json = readJSON file: 'deploy.json'
+                    env.STAGING_URL = json.deploy_url
+
+                    echo "🚀 Staging deployed: ${env.STAGING_URL}"
                 }
             }
         }
 
-
         /* =======================
-           APPROVAL BEFORE PRODUCTION
+           APPROVAL
         ======================= */
         stage('Approval') {
             steps {
                 timeout(time: 15, unit: 'MINUTES') {
-                    input message: "Review staging site at:\n${env.STAGING_URL}\n\nDo you wish to deploy to production?", ok: 'Yes, Deploy to Production!'
+                    input message: "🔍 Review staging:\n${env.STAGING_URL}\n\nDeploy to production?"
                 }
             }
         }
-
 
         /* =======================
            DEPLOY TO PRODUCTION
@@ -181,22 +140,15 @@ pipeline {
                     reuseNode true
                 }
             }
-
             steps {
                 sh '''
                     export NPM_CONFIG_CACHE=/tmp/.npm
-                    mkdir -p /tmp/.npm
-
                     npm install -g netlify-cli
 
-                    echo "Deploying to Production..."
-                    netlify --version
-                    netlify status
                     netlify deploy --dir=build --prod
                 '''
             }
         }
-
 
         /* =======================
            PROD E2E TESTS
@@ -209,31 +161,22 @@ pipeline {
                     reuseNode true
                 }
             }
-
-            environment {
-                CI_ENVIRONMENT_URL = 'PUT YOUR NETLIFY SITE URL HERE'
-            }
-
             steps {
                 sh '''
                     export NPM_CONFIG_CACHE=/tmp/.npm
-                    mkdir -p /tmp/.npm
 
-                    echo "Running Playwright tests against PRODUCTION: $CI_ENVIRONMENT_URL"
+                    echo "Testing production site..."
                     npx playwright test --reporter=html
                 '''
             }
-
             post {
                 always {
                     publishHTML([
                         reportDir: 'playwright-report',
                         reportFiles: 'index.html',
                         reportName: 'Playwright E2E (Production)',
-                        allowMissing: false,
                         keepAll: true,
-                        alwaysLinkToLastBuild: true,
-                        useWrapperFileDirectly: true
+                        alwaysLinkToLastBuild: true
                     ])
                 }
             }

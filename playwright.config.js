@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig, devices } from '@playwright/test';
+const { defineConfig, devices } = require('@playwright/test');
 
 /**
  * Read environment variables from file.
@@ -10,7 +10,7 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * @see https://playwright.dev/docs/test-configuration
  */
-export default defineConfig({
+module.exports = defineConfig({
   testDir: './e2e',
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -23,7 +23,7 @@ export default defineConfig({
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
     ['html'],
-    ['junit', { outputFile: 'test-results/junit.xml' }]
+    ['junit']
   ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {

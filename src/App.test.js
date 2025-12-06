@@ -1,11 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
 import App from './App';
 
-describe('App', () => {
-  it('renders learn Jenkins link', () => {
-    render(<App />);
-    const linkElement = screen.getByText(/learn Jenkins/i);
-    expect(linkElement).toBeInTheDocument();
-  });
+test('renders learn Jenkins link', () => {
+  render(<App />);
+  const linkElement = screen.getByText(/learn Jenkins/i);
+  expect(linkElement).toBeInTheDocument();
 });

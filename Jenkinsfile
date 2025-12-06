@@ -26,7 +26,9 @@ pipeline {
 
                     echo "=== Installing dependencies ==="
                     npm ci --omit=optional
-
+                    
+                    ls -la /home/node/.npm/_logs || true
+                    cat /home/node/.npm/_logs/*.log || true
                     echo "=== Building project ==="
                     npm run build
 

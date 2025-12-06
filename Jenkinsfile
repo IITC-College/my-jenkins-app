@@ -20,7 +20,10 @@ pipeline {
                     ls -la
                     node --version
                     npm --version
-                    npm ci
+                    npm ci || true
+                    echo "---- NPM ERROR LOG ----"
+                    ls -la /home/node/.npm/_logs || true
+                    cat /home/node/.npm/_logs/*.log || true
                     npm run build
                     ls -la
                 '''

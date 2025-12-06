@@ -38,9 +38,7 @@
     ]
   },
   "devDependencies": {
-    "@playwright/test": "^1.57.0",
-    "@types/node": "^20.8.6",
-    "typescript": "^4.9.5"
+    "@playwright/test": "^1.57.0"
   },
   "jest-junit": {
     "suiteName": "jest tests",
